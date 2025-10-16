@@ -18,7 +18,24 @@ export default function Signup() {
       if (name) await updateProfile(cred.user, { displayName: name });
       navigate("/dashboard");
     } catch (e) {
-      setErr(e.message);
+      let message;
+      switch (e.code) {
+        case "auth/invalid-email":
+          message = "Please enter a valid email address.";
+          break;
+        case "auth/email-already-in-use":
+          message = "Email address already has an account associated with it.";
+          break;
+        case "auth/weak-password":
+          message = "Password too weak. Use at least 6 characters.";
+          break;
+        case "auth/network-request-failed":
+          message = "Network error. Check your internet connection.";
+          break;
+        default:
+          message = "An unexpected error occurred. Please try again.";
+      }
+      setErr(message);
     }
   }
 

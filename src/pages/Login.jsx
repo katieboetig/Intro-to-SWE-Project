@@ -16,7 +16,27 @@ export default function Login() {
       await signInWithEmailAndPassword(auth, email, pw);
       navigate("/dashboard");
     } catch (e) {
-      setErr(e.message);
+      let message;
+      switch (e.code) {
+        case "auth/invalid-email":
+          message = "Please enter a valid email address.";
+          break;
+        case "auth/user-not-found":
+          message = "No account found with that email.";
+          break;
+        case "auth/invalid-credential":
+          message = "Incorrect password. Please try again.";
+          break;
+        case "auth/too-many-requests":
+          message = "Too many failed attempts. Please wait and try again later.";
+          break;
+        case "auth/network-request-failed":
+          message = "Network error. Check your internet connection.";
+          break;
+        default:
+          message = "An unexpected error occurred. Please try again.";
+      }
+      setErr(message);
     }
   }
 
