@@ -3,6 +3,7 @@ import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import ProtectedRoute from "./auth/ProtectedRoute.jsx";
+import "./App.css";
 
 export default function App() {
   return (
