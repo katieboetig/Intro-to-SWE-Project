@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Home, BookOpen, FileText, LogOut } from "lucide-react"
+import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
 
@@ -59,7 +60,8 @@ const mockIngredients = [
   },
 ]
 
-export default function FridgeHomepage({ userName = "User", onLogout }) {
+export default function Dashboard() {
+  const { user, logout } = useAuth()
   const [ingredients, setIngredients] = useState(mockIngredients)
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
@@ -76,12 +78,11 @@ export default function FridgeHomepage({ userName = "User", onLogout }) {
     alert("Upload functionality - integrate with your file upload system")
   }
 
-  const handleLogout = () => {
-    if (onLogout) {
-      onLogout()
-    } else {
-      // Default logout behavior
-      console.log("Logout clicked")
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error("Error logging out:", error)
     }
   }
 
@@ -92,7 +93,7 @@ export default function FridgeHomepage({ userName = "User", onLogout }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-orange-500 bg-clip-text text-transparent">
-              Welcome, {userName}!
+              Welcome, {user?.email || "User"}!
             </h1>
           </div>
         </div>
