@@ -1,9 +1,12 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Home, BookOpen, FileText, LogOut } from "lucide-react"
 import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
-
+import RecipeSearchBar from '../components/RecipeSearchBar';
+import RecipeList from '../components/RecipeList';
+import RecipeModal from '../components/RecipeModal';
+import { searchRecipes } from "../spoonacular"
 
 const mockIngredients = [
   {
@@ -66,6 +69,10 @@ export default function Dashboard() {
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  const [openId, setOpenId] = useState(null);
 
   const handleIngredientClick = (ingredient) => {
     setSelectedIngredient(ingredient)
@@ -85,6 +92,27 @@ export default function Dashboard() {
       console.error("Error logging out:", error)
     }
   }
+
+  async function runSearch(params) {
+    setLoading(true);
+    setErr('');
+    try {
+      const results = await searchRecipes(params);
+      setRecipes(results);
+    } catch (e) {
+      setErr(e.message || 'Search failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Initial load
+  useEffect(() => {
+  if (activeTab === "recipes" && recipes.length === 0) {
+    runSearch({ query: "popular" });
+  }
+}, [activeTab]);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-orange-50">
@@ -116,7 +144,12 @@ export default function Dashboard() {
             </button>
 
             <button
-              onClick={() => setActiveTab("recipes")}
+              onClick={() => {
+                setActiveTab("recipes")
+                if (recipes.length === 0) {
+                  runSearch(); // no args => popular
+                }
+              }}
               className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-colors ${
                 activeTab === "recipes"
                   ? "border-green-500 text-green-600"
@@ -171,10 +204,27 @@ export default function Dashboard() {
         )}
 
         {activeTab === "recipes" && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Recipes</h2>
-            <p className="text-gray-600">Recipe content coming soon...</p>
-          </div>
+          <section className="grid gap-6">
+            <header className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">Recipes</h2>
+              <p className="text-gray-600">Search and open a recipe to see ingredients & instructions.</p>
+            </header>
+
+            {/* Search controls */}
+            <RecipeSearchBar onSearch={runSearch} />
+
+            {/* Status / results */}
+            {loading && <p className="text-gray-600">Loading recipes…</p>}
+            {err && <p className="text-red-600">{err}</p>}
+            {!loading && !err && (
+              <RecipeList recipes={recipes} onOpen={setOpenId} />
+            )}
+
+            {/* Details modal */}
+            {openId && (
+              <RecipeModal id={openId} onClose={() => setOpenId(null)} />
+            )}
+          </section>
         )}
 
         {activeTab === "blog" && (
