@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Home, BookOpen, FileText, LogOut } from "lucide-react"
 import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
-import RecipeSearchBar from '../components/RecipeSearchBar';
-import RecipeList from '../components/RecipeList';
-import RecipeModal from '../components/RecipeModal';
+import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar";
+import RecipeModal from "../components/RecipeModal";
 import { searchRecipes } from "../spoonacular"
 
 const mockIngredients = [
@@ -69,10 +68,29 @@ export default function Dashboard() {
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
+
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState("");
   const [openId, setOpenId] = useState(null);
+
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const LOAD_SIZE = 24;
+  const sentinelRef = useRef(null);
+
+  const [filters, setFilters] = useState({
+    query: "",
+    cuisines: [],
+    diets: [],
+    intolerances: [],
+    priceBuckets: [],
+    price: { min: "", max: "" },
+    calories: { min: "", max: "" },
+    protein:  { min: "", max: "" },
+    carbs:    { min: "", max: "" },
+    fat:      { min: "", max: "" },
+  });
 
   const handleIngredientClick = (ingredient) => {
     setSelectedIngredient(ingredient)
@@ -93,25 +111,108 @@ export default function Dashboard() {
     }
   }
 
-  async function runSearch(params) {
+  const mapFiltersToAPI = (f) => ({
+    query: f.query || undefined,
+    cuisines: f.cuisines,
+    diets: f.diets,
+    intolerances: f.intolerances,
+    minCalories: f.calories.min !== "" ? f.calories.min : undefined,
+    maxCalories: f.calories.max !== "" ? f.calories.max : undefined,
+    minProtein:  f.protein.min  !== "" ? f.protein.min  : undefined,
+    maxProtein:  f.protein.max  !== "" ? f.protein.max  : undefined,
+    minCarbs:    f.carbs.min    !== "" ? f.carbs.min    : undefined,
+    maxCarbs:    f.carbs.max    !== "" ? f.carbs.max    : undefined,
+    minFat:      f.fat.min      !== "" ? f.fat.min      : undefined,
+    maxFat:      f.fat.max      !== "" ? f.fat.max      : undefined,
+  });
+
+  const priceFilter = (recipe) => {
+    const cents = recipe.pricePerServing ?? 0;
+    const usd = cents / 100;
+
+    const BUCKETS = [
+      { min: 0,  max: 2 },
+      { min: 2,  max: 5 },
+      { min: 5,  max: 10 },
+      { min: 10,  max: Infinity },
+    ];
+
+    const anyBucket = filters.priceBuckets.length > 0;
+    const passesBucket = !anyBucket || filters.priceBuckets.some((idx) => {
+      const b = BUCKETS[idx];
+      return usd >= b.min && usd < b.max;
+    });
+
+    const customMin = filters.price.min !== "" ? Number(filters.price.min) : -Infinity;
+    const customMax = filters.price.max !== "" ? Number(filters.price.max) :  Infinity;
+    const passesCustom = usd >= customMin && usd <= customMax;
+
+    return (anyBucket ? passesBucket && passesCustom : passesCustom);
+  };
+
+  async function loadPage(nextOffset, replace = false) {
     setLoading(true);
-    setErr('');
+    setErr("");
+
     try {
-      const results = await searchRecipes(params);
-      setRecipes(results);
+      const apiParams = {
+        ...mapFiltersToAPI(filters),
+        sort: "popularity",
+        number: LOAD_SIZE,
+        offset: nextOffset,
+      };
+
+      const res = await searchRecipes(apiParams);
+      // Support both shapes: {results,totalResults} OR array
+      const results = Array.isArray(res) ? res : (res.results || []);
+      const totalResults = Array.isArray(res) ? results.length : (res.totalResults ?? results.length);
+
+      // Apply price filter client-side
+      const filtered = results.filter(priceFilter);
+
+      setRecipes((prev) => (replace ? filtered : [...prev, ...filtered]));
+      setOffset(nextOffset + LOAD_SIZE);
+      setHasMore(nextOffset + LOAD_SIZE < totalResults);
     } catch (e) {
-      setErr(e.message || 'Search failed');
+      setErr(e.message || "Search failed");
     } finally {
       setLoading(false);
     }
   }
 
-  // Initial load
-  useEffect(() => {
-  if (activeTab === "recipes" && recipes.length === 0) {
-    runSearch({ query: "popular" });
+  // Apply sidebar filters -> refresh list from page 0
+  function applyFilters(newFilters) {
+    setFilters(newFilters);
+    setOffset(0);
+    setHasMore(true);
+    loadPage(0, true);
   }
-}, [activeTab]);
+
+  // Auto-load popular when entering the Recipes tab the first time
+  useEffect(() => {
+    if (activeTab === "recipes" && recipes.length === 0 && !loading) {
+      loadPage(0, true);
+    }
+  }, [activeTab]);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    if (activeTab !== "recipes") return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadPage(offset, false);
+        }
+      },
+      { rootMargin: "800px 0px" } // prefetch before hitting bottom
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeTab, hasMore, loading, offset]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (
@@ -146,8 +247,8 @@ export default function Dashboard() {
             <button
               onClick={() => {
                 setActiveTab("recipes")
-                if (recipes.length === 0) {
-                  runSearch(); // no args => popular
+                if (recipes.length === 0 && !loading) {
+                  loadPage(0, true); // no args => popular
                 }
               }}
               className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-colors ${
@@ -204,26 +305,63 @@ export default function Dashboard() {
         )}
 
         {activeTab === "recipes" && (
-          <section className="grid gap-6">
-            <header className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">Recipes</h2>
-              <p className="text-gray-600">Search and open a recipe to see ingredients & instructions.</p>
-            </header>
+          <section className="grid md:grid-cols-[18rem_1fr] gap-6">
+            {/* Sidebar filters */}
+            <RecipeFiltersSidebar value={filters} onChange={applyFilters} />
 
-            {/* Search controls */}
-            <RecipeSearchBar onSearch={runSearch} />
+            {/* Results area */}
+            <div className="min-h-[60vh]">
+              <header className="mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">Recipes</h2>
+                <p className="text-gray-600">Filter and scroll to load more.</p>
+              </header>
 
-            {/* Status / results */}
-            {loading && <p className="text-gray-600">Loading recipes…</p>}
-            {err && <p className="text-red-600">{err}</p>}
-            {!loading && !err && (
-              <RecipeList recipes={recipes} onOpen={setOpenId} />
-            )}
+              {err && <p className="text-red-600 mb-3">{err}</p>}
 
-            {/* Details modal */}
-            {openId && (
-              <RecipeModal id={openId} onClose={() => setOpenId(null)} />
-            )}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {recipes.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setOpenId(r.id)}
+                    className="text-left border border-gray-200 rounded-xl p-3 bg-white shadow-sm flex gap-3"
+                  >
+                    <img
+                      src={r.image}
+                      alt={r.title}
+                      className="w-24 h-24 rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                    <div className="flex-1">
+                      {/* Clamp title to 2 lines */}
+                      <div
+                        className="font-semibold"
+                        style={{
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                        title={r.title}
+                      >
+                        {r.title}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {r.readyInMinutes ? `${r.readyInMinutes} min` : ""}
+                        {r.readyInMinutes && r.servings ? " • " : ""}
+                        {r.servings ? `${r.servings} servings` : ""}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {loading && <p className="text-gray-500 mt-4">Loading…</p>}
+              {/* sentinel for infinite scroll */}
+              <div ref={sentinelRef} className="h-1" />
+
+              {/* Details modal */}
+              {openId && <RecipeModal id={openId} onClose={() => setOpenId(null)} />}
+            </div>
           </section>
         )}
 

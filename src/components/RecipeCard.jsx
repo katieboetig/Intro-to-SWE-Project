@@ -1,33 +1,29 @@
 export default function RecipeCard({ recipe, onOpen }) {
   return (
     <button
-      className="recipe-card"
       onClick={() => onOpen(recipe.id)}
-      style={{
-        display: 'flex',
-        gap: 12,
-        alignItems: 'center',
-        textAlign: 'left',
-        border: '1px solid #e5e7eb',
-        borderRadius: 12,
-        padding: 12,
-        background: '#fff',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-      }}
+      className="recipe-card w-full text-left border border-gray-200 rounded-xl p-3 bg-white shadow-sm"
+      style={{ display: "flex", gap: 12, alignItems: "center" }}
     >
-      <img
-        src={recipe.image}
-        alt={recipe.title}
-        width="96"
-        height="96"
-        style={{ borderRadius: 8, objectFit: 'cover' }}
-        loading="lazy"
-      />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600 }}>{recipe.title}</div>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>
-          {recipe.readyInMinutes ? `${recipe.readyInMinutes} min • ` : ''}
-          {recipe.servings ? `${recipe.servings} servings` : ''}
+      <img src={recipe.image} alt={recipe.title} width="96" height="96" className="rounded-lg object-cover" loading="lazy" />
+
+      <div className="flex-1">
+        {/* 2-line clamp + ellipsis */}
+        <div
+          className="font-semibold"
+          style={{
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden"
+          }}
+          title={recipe.title}
+        >
+          {recipe.title}
+        </div>
+
+        <div className="text-xs text-gray-500 mt-1">
+          {recipe.readyInMinutes ? `${recipe.readyInMinutes} min` : ""}{recipe.readyInMinutes && recipe.servings ? " • " : ""}{recipe.servings ? `${recipe.servings} servings` : ""}
         </div>
       </div>
     </button>
