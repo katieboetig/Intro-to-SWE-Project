@@ -37,7 +37,14 @@ export default function RecipeFiltersSidebar({ value, onChange }) {
   };
 
   return (
-    <aside className="w-full md:w-72 shrink-0 border border-gray-200 rounded-xl p-4 bg-white h-max sticky top-20">
+    <aside
+      className="
+        w-full md:w-72 shrink-0 border border-gray-200 rounded-xl bg-white
+        md:sticky md:top-20
+        md:max-h-[calc(100vh-6rem)]  md:overflow-y-auto
+        p-4
+      "
+    >
       {/* Search text */}
       <div className="mb-4">
         <input
