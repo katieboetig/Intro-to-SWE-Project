@@ -3,9 +3,8 @@ import { Home, BookOpen, FileText, LogOut } from "lucide-react"
 import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
-import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar";
-import RecipeModal from "../components/RecipeModal";
-import { searchRecipes } from "../spoonacular"
+import PhotoUploadButton from "../components/PhotoUploadButton"
+
 
 const mockIngredients = [
   {
@@ -64,7 +63,7 @@ const mockIngredients = [
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
-  const [ingredients, setIngredients] = useState(mockIngredients)
+  const [ingredients, setIngredients] = useState([])
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
@@ -97,11 +96,32 @@ export default function Dashboard() {
     setIsPanelOpen(true)
   }
 
-  const handleUpload = () => {
-    // Implement your upload logic here
-    console.log("Upload clicked")
-    alert("Upload functionality - integrate with your file upload system")
+  const handleIngredientsUpdate = (newIngredients) => {
+    // Transform webhook data to match our component format
+    const transformedIngredients = newIngredients.map((item, index) => ({
+      id: index + 1,
+      name: item.name,
+      icon: item.emoji,
+      quantity: item.quantity,
+      category: item.category,
+      confidence: item.confidence,
+      container: item.container,
+      expiry: item.expiry,
+      nutrition: {
+        // Placeholder nutrition data - can be enhanced later
+        calories: "--",
+        protein: "--",
+        carbs: "--",
+        fat: "--",
+        fiber: "--",
+      },
+      description: `${item.quantity} of ${item.name} (${item.category})`
+    }))
+    
+    setIngredients(transformedIngredients)
+    console.log('Updated ingredients:', transformedIngredients)
   }
+
 
   const handleLogout = async () => {
     try {
@@ -303,7 +323,7 @@ export default function Dashboard() {
               {/* Subtle radial gradient background */}
               <div className="absolute inset-0 bg-gradient-radial from-green-50/30 via-transparent to-orange-50/20 rounded-3xl transform scale-110 -z-10"></div>
               <div className="relative bg-gradient-to-br from-white/80 via-gray-50/60 to-white/90 rounded-2xl p-8 shadow-sm border border-gray-100/50">
-                <Fridge3D ingredients={ingredients} onIngredientClick={handleIngredientClick} onUpload={handleUpload} />
+                <Fridge3D ingredients={ingredients} onIngredientClick={handleIngredientClick} />
               </div>
             </div>
           </div>
@@ -380,6 +400,9 @@ export default function Dashboard() {
 
       {/* Side Panel */}
       <SidePanel ingredient={selectedIngredient} isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
+
+      {/* Photo Upload Button */}
+      <PhotoUploadButton onIngredientsUpdate={handleIngredientsUpdate} />
     </div>
   )
 }
