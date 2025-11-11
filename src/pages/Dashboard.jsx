@@ -4,6 +4,9 @@ import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
 import PhotoUploadButton from "../components/PhotoUploadButton"
+import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar"
+import RecipeModal from "../components/RecipeModal"
+import { searchRecipes } from "../spoonacular"
 
 
 const mockIngredients = [
