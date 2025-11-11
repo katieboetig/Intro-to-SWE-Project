@@ -126,7 +126,7 @@ export default function Dashboard() {
     maxFat:      f.fat.max      !== "" ? f.fat.max      : undefined,
   });
 
-  const priceFilter = (recipe) => {
+  const priceFilter = (recipe, filterState) => {
     const cents = recipe.pricePerServing ?? 0;
     const usd = cents / 100;
 
@@ -137,26 +137,29 @@ export default function Dashboard() {
       { min: 10,  max: Infinity },
     ];
 
-    const anyBucket = filters.priceBuckets.length > 0;
-    const passesBucket = !anyBucket || filters.priceBuckets.some((idx) => {
+    const anyBucket = filterState.priceBuckets.length > 0;
+    const passesBucket = !anyBucket || filterState.priceBuckets.some((idx) => {
       const b = BUCKETS[idx];
       return usd >= b.min && usd < b.max;
     });
 
-    const customMin = filters.price.min !== "" ? Number(filters.price.min) : -Infinity;
-    const customMax = filters.price.max !== "" ? Number(filters.price.max) :  Infinity;
+    const customMin = filterState.price.min !== "" ? Number(filterState.price.min) : -Infinity;
+    const customMax = filterState.price.max !== "" ? Number(filterState.price.max) :  Infinity;
     const passesCustom = usd >= customMin && usd <= customMax;
 
     return (anyBucket ? passesBucket && passesCustom : passesCustom);
   };
 
-  async function loadPage(nextOffset, replace = false) {
+  async function loadPage(nextOffset, replace = false, filtersToUse = null) {
     setLoading(true);
     setErr("");
 
     try {
+      // Use provided filters or fall back to current filters state
+      const currentFilters = filtersToUse !== null ? filtersToUse : filters;
+      
       const apiParams = {
-        ...mapFiltersToAPI(filters),
+        ...mapFiltersToAPI(currentFilters),
         sort: "popularity",
         number: LOAD_SIZE,
         offset: nextOffset,
@@ -167,8 +170,8 @@ export default function Dashboard() {
       const results = Array.isArray(res) ? res : (res.results || []);
       const totalResults = Array.isArray(res) ? results.length : (res.totalResults ?? results.length);
 
-      // Apply price filter client-side
-      const filtered = results.filter(priceFilter);
+      // Apply price filter client-side with the correct filter state
+      const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
 
       setRecipes((prev) => (replace ? filtered : [...prev, ...filtered]));
       setOffset(nextOffset + LOAD_SIZE);
@@ -185,7 +188,8 @@ export default function Dashboard() {
     setFilters(newFilters);
     setOffset(0);
     setHasMore(true);
-    loadPage(0, true);
+    // Pass newFilters directly to avoid closure issue with stale filters
+    loadPage(0, true, newFilters);
   }
 
   // Auto-load popular when entering the Recipes tab the first time
@@ -204,7 +208,8 @@ export default function Dashboard() {
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          loadPage(offset, false);
+          // Pass current filters to avoid stale closure
+          loadPage(offset, false, filters);
         }
       },
       { rootMargin: "800px 0px" } // prefetch before hitting bottom
@@ -212,7 +217,7 @@ export default function Dashboard() {
 
     obs.observe(el);
     return () => obs.disconnect();
-  }, [activeTab, hasMore, loading, offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, hasMore, loading, offset, filters]); // Added filters to dependency
 
 
   return (
