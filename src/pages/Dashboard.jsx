@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react"
-import { Home, BookOpen, FileText, LogOut } from "lucide-react"
+import { Home, BookOpen, FileText, LogOut, Menu, X } from "lucide-react"
 import { useAuth } from "../auth/AuthContext"
 import Fridge3D from "../components/Fridge3D"
 import SidePanel from "../components/SidePanel"
 import PhotoUploadButton from "../components/PhotoUploadButton"
+import ManualIngredientForm from "../components/ManualIngredientForm"
+import AddToFridgeButton from "../components/AddToFridgeButton"
 import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar"
 import RecipeModal from "../components/RecipeModal"
 import { searchRecipes } from "../spoonacular"
@@ -70,6 +72,11 @@ export default function Dashboard() {
   const [selectedIngredient, setSelectedIngredient] = useState(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("home")
+  const [showManualForm, setShowManualForm] = useState(false)
+  const [editingIngredient, setEditingIngredient] = useState(null)
+  const [showPhotoModal, setShowPhotoModal] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
 
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -102,7 +109,7 @@ export default function Dashboard() {
   const handleIngredientsUpdate = (newIngredients) => {
     // Transform webhook data to match our component format
     const transformedIngredients = newIngredients.map((item, index) => ({
-      id: index + 1,
+      id: Date.now() + index,
       name: item.name,
       icon: item.emoji,
       quantity: item.quantity,
@@ -124,6 +131,43 @@ export default function Dashboard() {
     setIngredients(transformedIngredients)
     console.log('Updated ingredients:', transformedIngredients)
   }
+
+  const handleSaveIngredient = (ingredientData) => {
+    const newIngredient = {
+      ...ingredientData,
+      nutrition: {
+        calories: "--",
+        protein: "--",
+        carbs: "--",
+        fat: "--",
+        fiber: "--",
+      },
+      description: ingredientData.quantity 
+        ? `${ingredientData.quantity} of ${ingredientData.name}` 
+        : ingredientData.name
+    };
+
+    if (editingIngredient) {
+      // Update existing ingredient
+      setIngredients(prev => prev.map(ing => 
+        ing.id === editingIngredient.id ? newIngredient : ing
+      ));
+    } else {
+      // Add new ingredient
+      setIngredients(prev => [...prev, newIngredient]);
+    }
+    
+    setEditingIngredient(null);
+  };
+
+  const handleEditIngredient = (ingredient) => {
+    setEditingIngredient(ingredient);
+    setShowManualForm(true);
+  };
+
+  const handleDeleteIngredient = (ingredientId) => {
+    setIngredients(prev => prev.filter(ing => ing.id !== ingredientId));
+  };
 
 
   const handleLogout = async () => {
@@ -246,83 +290,129 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-orange-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+        <div className="px-6 lg:px-12 py-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-orange-500 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-green-600 to-orange-500 bg-clip-text text-transparent">
               Welcome, {user?.displayName || "User"}!
             </h1>
+            <button
+              onClick={() => setShowSidebar(true)}
+              className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <Menu className="w-7 h-7 text-gray-700" />
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab("home")}
-              className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-colors ${
-                activeTab === "home"
-                  ? "border-green-500 text-green-600"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
-              }`}
-            >
-              <Home className="w-5 h-5" />
-              <span className="font-medium">Home</span>
-            </button>
+      {/* Sidebar Navigation Overlay */}
+      <>
+        {/* Backdrop */}
+        <div
+          className={`fixed inset-0 bg-black/50 transition-opacity duration-300 z-40 ${
+            showSidebar ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+          onClick={() => setShowSidebar(false)}
+        />
 
-            <button
-              onClick={() => {
-                setActiveTab("recipes")
-                if (recipes.length === 0 && !loading) {
-                  loadPage(0, true); // no args => popular
-                }
-              }}
-              className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-colors ${
-                activeTab === "recipes"
-                  ? "border-green-500 text-green-600"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
-              }`}
-            >
-              <BookOpen className="w-5 h-5" />
-              <span className="font-medium">Recipes</span>
-            </button>
+        {/* Sidebar */}
+        <div
+          className={`fixed right-0 top-0 h-full w-80 bg-white shadow-2xl transition-transform duration-300 z-50 ${
+            showSidebar ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">Menu</h2>
+              <button
+                onClick={() => setShowSidebar(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
 
-            <button
-              onClick={() => setActiveTab("blog")}
-              className={`flex items-center gap-2 px-4 py-4 border-b-2 transition-colors ${
-                activeTab === "blog"
-                  ? "border-green-500 text-green-600"
-                  : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
-              }`}
-            >
-              <FileText className="w-5 h-5" />
-              <span className="font-medium">Blog</span>
-            </button>
+            {/* Navigation Items */}
+            <nav className="flex-1 p-4 space-y-2">
+              <button
+                onClick={() => {
+                  setActiveTab("home");
+                  setShowSidebar(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-colors ${
+                  activeTab === "home"
+                    ? "bg-green-100 text-green-700"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <Home className="w-6 h-6" />
+                <span className="font-medium text-lg">Home</span>
+              </button>
 
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-4 border-b-2 border-transparent text-gray-600 hover:text-red-600 hover:border-red-300 transition-colors ml-auto"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Logout</span>
-            </button>
+              <button
+                onClick={() => {
+                  setActiveTab("recipes");
+                  setShowSidebar(false);
+                  if (recipes.length === 0 && !loading) {
+                    loadPage(0, true);
+                  }
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-colors ${
+                  activeTab === "recipes"
+                    ? "bg-green-100 text-green-700"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <BookOpen className="w-6 h-6" />
+                <span className="font-medium text-lg">Recipes</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab("blog");
+                  setShowSidebar(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-colors ${
+                  activeTab === "blog"
+                    ? "bg-green-100 text-green-700"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                <FileText className="w-6 h-6" />
+                <span className="font-medium text-lg">Blog</span>
+              </button>
+            </nav>
+
+            {/* Logout at Bottom */}
+            <div className="p-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setShowSidebar(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-4 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-6 h-6" />
+                <span className="font-medium text-lg">Logout</span>
+              </button>
+            </div>
           </div>
         </div>
-      </nav>
+      </>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="px-6 lg:px-12 py-8">
         {activeTab === "home" && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <div className="text-center space-y-2">
               <h2 className="text-3xl font-bold text-gray-900">Your Smart Fridge</h2>
               <p className="text-gray-600">Click the fridge to view your ingredients</p>
             </div>
 
             {/* Fridge Container with Subtle Background */}
-            <div className="relative">
+            <div className="relative max-w-4xl mx-auto">
               {/* Subtle radial gradient background */}
               <div className="absolute inset-0 bg-gradient-radial from-green-50/30 via-transparent to-orange-50/20 rounded-3xl transform scale-110 -z-10"></div>
               <div className="relative bg-gradient-to-br from-white/80 via-gray-50/60 to-white/90 rounded-2xl p-8 shadow-sm border border-gray-100/50">
@@ -333,36 +423,36 @@ export default function Dashboard() {
         )}
 
         {activeTab === "recipes" && (
-          <section className="grid md:grid-cols-[18rem_1fr] gap-6">
+          <section className="grid lg:grid-cols-[20rem_1fr] gap-6">
             {/* Sidebar filters */}
             <RecipeFiltersSidebar value={filters} onChange={applyFilters} />
 
             {/* Results area */}
             <div className="min-h-[60vh]">
-              <header className="mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Recipes</h2>
-                <p className="text-gray-600">Filter and scroll to load more.</p>
+              <header className="mb-6">
+                <h2 className="text-3xl font-bold text-gray-900">Recipes</h2>
+                <p className="text-gray-600 text-lg">Filter and scroll to load more.</p>
               </header>
 
               {err && <p className="text-red-600 mb-3">{err}</p>}
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {recipes.map((r) => (
                   <button
                     key={r.id}
                     onClick={() => setOpenId(r.id)}
-                    className="text-left border border-gray-200 rounded-xl p-3 bg-white shadow-sm flex gap-3"
+                    className="text-left border border-gray-200 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3"
                   >
                     <img
                       src={r.image}
                       alt={r.title}
-                      className="w-24 h-24 rounded-lg object-cover"
+                      className="w-full h-40 rounded-lg object-cover"
                       loading="lazy"
                     />
                     <div className="flex-1">
                       {/* Clamp title to 2 lines */}
                       <div
-                        className="font-semibold"
+                        className="font-semibold text-base"
                         style={{
                           display: "-webkit-box",
                           WebkitLineClamp: 2,
@@ -373,7 +463,7 @@ export default function Dashboard() {
                       >
                         {r.title}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-sm text-gray-500 mt-2">
                         {r.readyInMinutes ? `${r.readyInMinutes} min` : ""}
                         {r.readyInMinutes && r.servings ? " • " : ""}
                         {r.servings ? `${r.servings} servings` : ""}
@@ -402,10 +492,47 @@ export default function Dashboard() {
       </main>
 
       {/* Side Panel */}
-      <SidePanel ingredient={selectedIngredient} isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
+      <SidePanel 
+        ingredient={selectedIngredient} 
+        isOpen={isPanelOpen} 
+        onClose={() => setIsPanelOpen(false)}
+        onEdit={handleEditIngredient}
+        onDelete={handleDeleteIngredient}
+      />
 
-      {/* Photo Upload Button */}
-      <PhotoUploadButton onIngredientsUpdate={handleIngredientsUpdate} />
+      {/* Manual Ingredient Form */}
+      <ManualIngredientForm
+        isOpen={showManualForm}
+        onClose={() => {
+          setShowManualForm(false);
+          setEditingIngredient(null);
+        }}
+        onSave={handleSaveIngredient}
+        editingIngredient={editingIngredient}
+      />
+
+      {/* Combined Add to Fridge Button - Only on Home Page */}
+      {activeTab === "home" && (
+        <>
+          <AddToFridgeButton
+            onChooseManual={() => {
+              setEditingIngredient(null);
+              setShowManualForm(true);
+            }}
+            onChoosePhoto={() => setShowPhotoModal(true)}
+            isProcessing={processing}
+          />
+
+          {/* Photo Upload Handler (no button, just functionality) */}
+          <PhotoUploadButton 
+            onIngredientsUpdate={handleIngredientsUpdate}
+            showModal={showPhotoModal}
+            setShowModal={setShowPhotoModal}
+            processing={processing}
+            setProcessing={setProcessing}
+          />
+        </>
+      )}
     </div>
   )
 }

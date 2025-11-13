@@ -1,6 +1,6 @@
-import { X } from "lucide-react"
+import { X, Edit2, Trash2 } from "lucide-react"
 
-export default function SidePanel({ ingredient, isOpen, onClose }) {
+export default function SidePanel({ ingredient, isOpen, onClose, onEdit, onDelete }) {
   if (!ingredient) return null
 
   return (
@@ -128,6 +128,34 @@ export default function SidePanel({ ingredient, isOpen, onClose }) {
                 <p className="text-gray-600 text-sm leading-relaxed">{ingredient.description}</p>
               </div>
             )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="border-t border-gray-200 p-6 bg-gray-50">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  onEdit?.(ingredient);
+                  onClose();
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+              >
+                <Edit2 className="w-5 h-5" />
+                Edit
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete ${ingredient.name}?`)) {
+                    onDelete?.(ingredient.id);
+                    onClose();
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+              >
+                <Trash2 className="w-5 h-5" />
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       </div>
