@@ -1,10 +1,10 @@
 import { useState } from "react"
 import { Camera, Image, X } from "lucide-react"
 import { compressAndConvertToPNG } from "../utils/imageUtils"
+import WebcamCapture from "./WebcamCapture"
 
-export default function PhotoUploadButton({ onIngredientsUpdate }) {
-  const [showModal, setShowModal] = useState(false)
-  const [processing, setProcessing] = useState(false)
+export default function PhotoUploadButton({ onIngredientsUpdate, showModal, setShowModal, processing, setProcessing }) {
+  const [showWebcam, setShowWebcam] = useState(false);
 
   const processImage = async (file) => {
     try {
@@ -66,22 +66,39 @@ export default function PhotoUploadButton({ onIngredientsUpdate }) {
     }
   }
 
+  // Check if device is mobile
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+      || (window.innerWidth <= 768);
+  };
+
   const handleTakePhoto = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.capture = 'environment' // Opens camera on mobile
+    setShowModal(false);
     
-    input.onchange = async (e) => {
-      const file = e.target.files[0]
-      if (file) {
-        await processImage(file)
+    if (isMobileDevice()) {
+      // On mobile, use native camera
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/*'
+      input.capture = 'environment'
+      
+      input.onchange = async (e) => {
+        const file = e.target.files[0]
+        if (file) {
+          await processImage(file)
+        }
       }
+      
+      input.click()
+    } else {
+      // On desktop, use webcam
+      setShowWebcam(true);
     }
-    
-    input.click()
-    setShowModal(false)
   }
+
+  const handleWebcamCapture = async (file) => {
+    await processImage(file);
+  };
 
   const handleChoosePhoto = () => {
     const input = document.createElement('input')
@@ -101,19 +118,40 @@ export default function PhotoUploadButton({ onIngredientsUpdate }) {
 
   return (
     <>
-      {/* Rectangular Button at Bottom Center */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={processing}
-          className={`bg-green-500 hover:bg-green-600 text-white rounded-xl px-8 py-4 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 flex items-center gap-3 font-medium ${
-            processing ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          <Camera className="w-5 h-5" />
-          {processing ? 'Processing...' : 'Add Ingredients Photo'}
-        </button>
-      </div>
+      {/* Webcam Capture Modal */}
+      <WebcamCapture
+        isOpen={showWebcam}
+        onClose={() => setShowWebcam(false)}
+        onCapture={handleWebcamCapture}
+      />
+
+      {/* Loading Overlay */}
+      {processing && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 space-y-6">
+            {/* Spinner */}
+            <div className="flex justify-center">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 border-4 border-green-200 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-green-500 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+            </div>
+
+            {/* Message */}
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold text-gray-900">Analyzing your ingredients...</h3>
+              <p className="text-gray-600">This may take a minute. Please wait while we process your photo.</p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+            </div>
+
+            <p className="text-center text-sm text-gray-500">Do not close this window</p>
+          </div>
+        </div>
+      )}
 
       {/* Photo Upload Modal */}
       {showModal && (
@@ -128,6 +166,18 @@ export default function PhotoUploadButton({ onIngredientsUpdate }) {
               >
                 <X className="w-6 h-6" />
               </button>
+            </div>
+
+            {/* Tips for Best Results */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-2 text-sm">📸 Tips for Best Results:</h4>
+              <ul className="text-blue-800 text-xs space-y-1">
+                <li>• Take photos <strong>close up</strong> to the ingredients</li>
+                <li>• Use <strong>good lighting</strong> (natural light works best)</li>
+                <li>• Keep ingredients <strong>clearly visible</strong></li>
+                <li>• Avoid shadows and glare</li>
+                <li>• Center the items in the frame</li>
+              </ul>
             </div>
 
             {/* Modal Content */}
