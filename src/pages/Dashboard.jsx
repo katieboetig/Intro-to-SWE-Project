@@ -217,6 +217,38 @@ export default function Dashboard() {
     return (anyBucket ? passesBucket && passesCustom : passesCustom);
   };
 
+  // Count how many user fridge ingredients match a recipe
+  const countMatchingIngredients = (recipe) => {
+    if (!ingredients.length) return 0;
+    
+    const fridgeIngredientNames = ingredients.map(ing => ing.name.toLowerCase());
+    // Use extendedIngredients from Spoonacular API
+    const recipeIngredients = recipe.extendedIngredients || [];
+    
+    let matchCount = 0;
+    recipeIngredients.forEach(recipeIng => {
+      const recipeIngName = recipeIng.name.toLowerCase();
+      if (fridgeIngredientNames.some(fridgeName => 
+        recipeIngName.includes(fridgeName) || fridgeName.includes(recipeIngName)
+      )) {
+        matchCount++;
+      }
+    });
+    
+    return matchCount;
+  };
+
+  // Sort recipes by fridge ingredient matches (highest first)
+  const sortRecipesByFridgeMatches = (recipesToSort) => {
+    if (!ingredients.length) return recipesToSort;
+    
+    return [...recipesToSort].sort((a, b) => {
+      const aMatches = countMatchingIngredients(a);
+      const bMatches = countMatchingIngredients(b);
+      return bMatches - aMatches;
+    });
+  };
+
   async function loadPage(nextOffset, replace = false, filtersToUse = null) {
     setLoading(true);
     setErr("");
@@ -239,8 +271,16 @@ export default function Dashboard() {
 
       // Apply price filter client-side with the correct filter state
       const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
+      
+      // If user has fridge ingredients, only show recipes that match at least one ingredient
+      let finalRecipes = filtered;
+      if (ingredients.length > 0) {
+        finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
+        // Sort by fridge ingredient matches (most matching first)
+        finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
+      }
 
-      setRecipes((prev) => (replace ? filtered : [...prev, ...filtered]));
+      setRecipes((prev) => (replace ? finalRecipes : sortRecipesByFridgeMatches([...prev, ...finalRecipes])));
       setOffset(nextOffset + LOAD_SIZE);
       setHasMore(nextOffset + LOAD_SIZE < totalResults);
     } catch (e) {
