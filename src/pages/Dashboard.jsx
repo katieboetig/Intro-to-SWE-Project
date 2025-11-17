@@ -9,6 +9,7 @@ import AddToFridgeButton from "../components/AddToFridgeButton"
 import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar"
 import RecipeModal from "../components/RecipeModal"
 import { searchRecipes } from "../spoonacular"
+import { backendSearchRecipes } from "../api/backend"
 
 
 const mockIngredients = [
@@ -86,6 +87,10 @@ export default function Dashboard() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const LOAD_SIZE = 24;
+  // Fetch a larger batch once up front so we can client-side filter/sort by fridge ingredients
+  const FULL_FETCH_SIZE = 200;
+  // Store the full fetched set in memory so infinite scroll is purely client-side
+  const [allRecipes, setAllRecipes] = useState(null);
   const sentinelRef = useRef(null);
 
   const [filters, setFilters] = useState({
@@ -249,6 +254,7 @@ export default function Dashboard() {
     });
   };
 
+  // Load a full batch once (when replace === true) and then page client-side.
   async function loadPage(nextOffset, replace = false, filtersToUse = null) {
     setLoading(true);
     setErr("");
@@ -256,33 +262,66 @@ export default function Dashboard() {
     try {
       // Use provided filters or fall back to current filters state
       const currentFilters = filtersToUse !== null ? filtersToUse : filters;
-      
-      const apiParams = {
-        ...mapFiltersToAPI(currentFilters),
-        sort: "popularity",
-        number: LOAD_SIZE,
-        offset: nextOffset,
-      };
 
-      const res = await searchRecipes(apiParams);
-      // Support both shapes: {results,totalResults} OR array
-      const results = Array.isArray(res) ? res : (res.results || []);
-      const totalResults = Array.isArray(res) ? results.length : (res.totalResults ?? results.length);
+      // When replacing (initial load or new filters), fetch a larger batch up front
+      if (replace) {
+        // Request the backend which uses the cached Mongo dataset
+        const res = await backendSearchRecipes({
+          filters: currentFilters,
+          fridgeIngredients: ingredients.map((i) => i.name),
+          offset: 0,
+          limit: FULL_FETCH_SIZE,
+        });
+        const results = Array.isArray(res) ? res : (res.results || []);
 
-      // Apply price filter client-side with the correct filter state
-      const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
-      
-      // If user has fridge ingredients, only show recipes that match at least one ingredient
-      let finalRecipes = filtered;
-      if (ingredients.length > 0) {
-        finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
-        // Sort by fridge ingredient matches (most matching first)
-        finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
+        // Apply price filter client-side with the correct filter state
+        const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
+
+        // If user has fridge ingredients, only include recipes that match at least one ingredient
+        let finalRecipes = filtered;
+        if (ingredients.length > 0) {
+          finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
+          finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
+        }
+
+        // Store full set in memory and expose the first page to the UI
+        setAllRecipes(finalRecipes);
+        const firstSlice = finalRecipes.slice(0, LOAD_SIZE);
+        setRecipes(firstSlice);
+        setOffset(firstSlice.length);
+        setHasMore(firstSlice.length < finalRecipes.length);
+      } else {
+        // Not replacing: this call comes from the intersection observer when client-side paging.
+        // If we have the full set in memory, just page from it. Otherwise, fall back to fetching a small page.
+        if (allRecipes) {
+          const nextSlice = allRecipes.slice(nextOffset, nextOffset + LOAD_SIZE);
+          setRecipes((prev) => [...prev, ...nextSlice]);
+          setOffset(nextOffset + nextSlice.length);
+          setHasMore(nextOffset + nextSlice.length < allRecipes.length);
+        } else {
+          // Fallback behavior: fetch another small page from the API
+          const apiParams = {
+            ...mapFiltersToAPI(currentFilters),
+            sort: "popularity",
+            number: LOAD_SIZE,
+            offset: nextOffset,
+          };
+
+          const res = await searchRecipes(apiParams);
+          const results = Array.isArray(res) ? res : (res.results || []);
+          const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
+          let finalRecipes = filtered;
+          if (ingredients.length > 0) {
+            finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
+            finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
+          }
+
+          setRecipes((prev) => [...prev, ...finalRecipes]);
+          setOffset(nextOffset + LOAD_SIZE);
+          // We don't have total count here; assume more until an empty page is returned
+          setHasMore(finalRecipes.length === LOAD_SIZE);
+        }
       }
-
-      setRecipes((prev) => (replace ? finalRecipes : sortRecipesByFridgeMatches([...prev, ...finalRecipes])));
-      setOffset(nextOffset + LOAD_SIZE);
-      setHasMore(nextOffset + LOAD_SIZE < totalResults);
     } catch (e) {
       setErr(e.message || "Search failed");
     } finally {
@@ -306,6 +345,18 @@ export default function Dashboard() {
     }
   }, [activeTab]);
 
+  // When fridge ingredients change while viewing the Recipes tab, reload the full list
+  // We guard so we don't duplicate the initial load that runs when first entering the tab.
+  useEffect(() => {
+    if (activeTab !== "recipes") return;
+    // If we haven't loaded any recipes yet, let the existing activeTab effect handle the initial load
+    if (recipes.length === 0) return;
+    if (loading) return;
+
+    // Refresh the full fetch so the fridge-matching/sort is recomputed
+    loadPage(0, true);
+  }, [ingredients, activeTab]);
+
   // Infinite scroll via IntersectionObserver
   useEffect(() => {
     if (activeTab !== "recipes") return;
@@ -315,8 +366,16 @@ export default function Dashboard() {
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          // Pass current filters to avoid stale closure
-          loadPage(offset, false, filters);
+          // If we have the full set in memory, page client-side. Otherwise request another page.
+          if (allRecipes) {
+            const nextSlice = allRecipes.slice(offset, offset + LOAD_SIZE);
+            setRecipes((prev) => [...prev, ...nextSlice]);
+            setOffset(offset + nextSlice.length);
+            setHasMore(offset + nextSlice.length < allRecipes.length);
+          } else {
+            // Pass current filters to avoid stale closure
+            loadPage(offset, false, filters);
+          }
         }
       },
       { rootMargin: "800px 0px" } // prefetch before hitting bottom
