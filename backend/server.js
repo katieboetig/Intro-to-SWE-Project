@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { searchCachedRecipes, ensureIndexes, getStats } = require('./services/recipes');
+const { searchCachedRecipes, ensureIndexes, getStats, getNutritionStats } = require('./services/recipes');
 
 const PORT = process.env.PORT || 3001;
 
@@ -20,6 +20,17 @@ app.get('/api/recipes/debug', async (req, res) => {
     res.json(stats);
   } catch (err) {
     console.error('debug error', err);
+    res.status(500).json({ error: 'debug-failed', message: err.message });
+  }
+});
+
+// Nutrition coverage debug
+app.get('/api/recipes/debug/nutrition', async (req, res) => {
+  try {
+    const stats = await getNutritionStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('debug nutrition error', err);
     res.status(500).json({ error: 'debug-failed', message: err.message });
   }
 });

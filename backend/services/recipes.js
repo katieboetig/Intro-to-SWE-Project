@@ -238,8 +238,18 @@ async function upsertRecipes(recipes) {
   const col = getCollection(db);
 
   const ops = recipes.map((r) => {
-    // Normalize nutrients array to numeric fields we can filter on
-    const nutrients = (r.nutrition && r.nutrition.nutrients) || [];
+    // Try to extract nutrition from various possible Spoonacular response shapes
+    let nutrients = [];
+    
+    // Shape 1: nutrition.nutrients array
+    if (r.nutrition && r.nutrition.nutrients) {
+      nutrients = r.nutrition.nutrients;
+    }
+    // Shape 2: nutrients array directly on recipe
+    else if (Array.isArray(r.nutrients)) {
+      nutrients = r.nutrients;
+    }
+    
     const findNutrient = (name) => {
       const n = nutrients.find((x) => x.name && x.name.toLowerCase().includes(name.toLowerCase()));
       return n ? Number(n.amount) : null;
@@ -289,4 +299,16 @@ async function getStats(sampleLimit = 1) {
   return { total, sample };
 }
 
-module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats };
+async function getNutritionStats() {
+  const client = await getClient();
+  const db = client.db();
+  const col = getCollection(db);
+  const total = await col.countDocuments();
+  const hasCalories = await col.countDocuments({ 'nutrition.calories': { $ne: null } });
+  const hasProtein = await col.countDocuments({ 'nutrition.protein': { $ne: null } });
+  const hasCarbs = await col.countDocuments({ 'nutrition.carbs': { $ne: null } });
+  const hasFat = await col.countDocuments({ 'nutrition.fat': { $ne: null } });
+  return { total, hasCalories, hasProtein, hasCarbs, hasFat };
+}
+
+module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats, getNutritionStats };

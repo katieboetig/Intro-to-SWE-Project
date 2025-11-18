@@ -88,7 +88,8 @@ export default function Dashboard() {
   const [hasMore, setHasMore] = useState(true);
   const LOAD_SIZE = 24;
   // Fetch a larger batch once up front so we can client-side filter/sort by fridge ingredients
-  const FULL_FETCH_SIZE = 200;
+  // Increase to cover the backend backfill size so users can scroll through all cached recipes
+  const FULL_FETCH_SIZE = 10000;
   // Store the full fetched set in memory so infinite scroll is purely client-side
   const [allRecipes, setAllRecipes] = useState(null);
   const sentinelRef = useRef(null);

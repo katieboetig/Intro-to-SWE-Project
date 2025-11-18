@@ -15,6 +15,7 @@ async function fetchPage(offset = 0, number = 100) {
     number,
     offset,
     addRecipeInformation: true,
+    addRecipeNutrition: true,
     fillIngredients: true,
   };
   const res = await axios.get(url, { params });
@@ -27,25 +28,36 @@ async function run() {
   const pageSize = 100;
   let total = Infinity;
   let fetched = 0;
+  const recipesToUpsert = [];
+
   while (offset < total) {
-    console.log(`Fetching offset=${offset}`);
+    console.log(`Fetching offset=${offset}...`);
     const data = await fetchPage(offset, pageSize);
     const results = data.results || [];
     if (total === Infinity) total = data.totalResults || results.length;
     if (!results.length) break;
-    await upsertRecipes(results);
+
+    // Add results (with nutrition) to batch
+    recipesToUpsert.push(...results);
     fetched += results.length;
-    offset += results.length;
-    // be nice to the API
-    await new Promise((r) => setTimeout(r, 800));
-    // simple safety cap - increase to fetch broader dataset for filtering
-    if (fetched > 10000) {
-      console.log('Reached safety cap of 10000 recipes during backfill');
+
+    // Upsert in batches of 50
+    if (recipesToUpsert.length >= 50 || offset + pageSize >= total) {
+      console.log(`Upserting batch of ${recipesToUpsert.length} recipes...`);
+      await upsertRecipes(recipesToUpsert);
+      recipesToUpsert.length = 0;
+    }
+
+    offset += pageSize;
+
+    // Safety cap: 10,000 recipes
+    if (fetched >= 10000) {
+      console.log('Reached safety cap of 10,000 recipes');
       break;
     }
   }
 
-  console.log('Backfill complete. Fetched', fetched);
+  console.log('Backfill complete. Fetched and cached', fetched, 'recipes');
   process.exit(0);
 }
 
