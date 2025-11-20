@@ -290,4 +290,18 @@ async function getNutritionStats() {
   return { total, hasCalories, hasProtein, hasCarbs, hasFat };
 }
 
-module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats, getNutritionStats };
+// Get a single recipe by spoonacularId
+async function getRecipeById(id) {
+  const client = await getClient();
+  const db = client.db();
+  const col = getCollection(db);
+  const doc = await col.findOne(
+    { spoonacularId: Number(id) },
+    { projection: { _id: 0 } }
+  );
+  if (!doc) return null;
+  // Return with id field for compatibility
+  return { ...doc, id: doc.spoonacularId };
+}
+
+module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats, getNutritionStats, getRecipeById };

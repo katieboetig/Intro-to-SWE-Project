@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { searchCachedRecipes, ensureIndexes, getStats, getNutritionStats } = require('./services/recipes');
+const { searchCachedRecipes, ensureIndexes, getStats, getNutritionStats, getRecipeById } = require('./services/recipes');
 
 const PORT = process.env.PORT || 3001;
 
@@ -52,6 +52,21 @@ app.post('/api/recipes/search', async (req, res) => {
   } catch (err) {
     console.error('search error', err);
     res.status(500).json({ error: 'search-failed', message: err.message });
+  }
+});
+
+// Get single recipe by ID
+app.get('/api/recipes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const recipe = await getRecipeById(id);
+    if (!recipe) {
+      return res.status(404).json({ error: 'not-found', message: 'Recipe not found' });
+    }
+    res.json(recipe);
+  } catch (err) {
+    console.error('get recipe error', err);
+    res.status(500).json({ error: 'get-failed', message: err.message });
   }
 });
 
