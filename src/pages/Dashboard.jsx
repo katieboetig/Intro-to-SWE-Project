@@ -8,7 +8,6 @@ import ManualIngredientForm from "../components/ManualIngredientForm"
 import AddToFridgeButton from "../components/AddToFridgeButton"
 import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar"
 import RecipeModal from "../components/RecipeModal"
-import { searchRecipes } from "../spoonacular"
 import { backendSearchRecipes } from "../api/backend"
 
 
@@ -184,21 +183,6 @@ export default function Dashboard() {
     }
   }
 
-  const mapFiltersToAPI = (f) => ({
-    query: f.query || undefined,
-    cuisines: f.cuisines,
-    diets: f.diets,
-    intolerances: f.intolerances,
-    minCalories: f.calories.min !== "" ? f.calories.min : undefined,
-    maxCalories: f.calories.max !== "" ? f.calories.max : undefined,
-    minProtein:  f.protein.min  !== "" ? f.protein.min  : undefined,
-    maxProtein:  f.protein.max  !== "" ? f.protein.max  : undefined,
-    minCarbs:    f.carbs.min    !== "" ? f.carbs.min    : undefined,
-    maxCarbs:    f.carbs.max    !== "" ? f.carbs.max    : undefined,
-    minFat:      f.fat.min      !== "" ? f.fat.min      : undefined,
-    maxFat:      f.fat.max      !== "" ? f.fat.max      : undefined,
-  });
-
   const priceFilter = (recipe, filterState) => {
     const cents = recipe.pricePerServing ?? 0;
     const usd = cents / 100;
@@ -293,34 +277,12 @@ export default function Dashboard() {
         setHasMore(firstSlice.length < finalRecipes.length);
       } else {
         // Not replacing: this call comes from the intersection observer when client-side paging.
-        // If we have the full set in memory, just page from it. Otherwise, fall back to fetching a small page.
+        // If we have the full set in memory, just page from it.
         if (allRecipes) {
           const nextSlice = allRecipes.slice(nextOffset, nextOffset + LOAD_SIZE);
           setRecipes((prev) => [...prev, ...nextSlice]);
           setOffset(nextOffset + nextSlice.length);
           setHasMore(nextOffset + nextSlice.length < allRecipes.length);
-        } else {
-          // Fallback behavior: fetch another small page from the API
-          const apiParams = {
-            ...mapFiltersToAPI(currentFilters),
-            sort: "popularity",
-            number: LOAD_SIZE,
-            offset: nextOffset,
-          };
-
-          const res = await searchRecipes(apiParams);
-          const results = Array.isArray(res) ? res : (res.results || []);
-          const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
-          let finalRecipes = filtered;
-          if (ingredients.length > 0) {
-            finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
-            finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
-          }
-
-          setRecipes((prev) => [...prev, ...finalRecipes]);
-          setOffset(nextOffset + LOAD_SIZE);
-          // We don't have total count here; assume more until an empty page is returned
-          setHasMore(finalRecipes.length === LOAD_SIZE);
         }
       }
     } catch (e) {
