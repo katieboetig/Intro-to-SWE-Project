@@ -118,38 +118,13 @@ async function searchCachedRecipes({ filters = {}, fridgeIngredients = [], offse
     match['cuisines'] = { $in: filters.cuisines };
   }
 
-  // Intolerances
-  // Intolerances: handled later via ingredient name checks (not a direct field on recipes)
+  // Intolerances: filter by recipe's intolerances field
+  if (filters.intolerances && filters.intolerances.length > 0) {
+    match['intolerances'] = { $not: { $elemMatch: { $in: filters.intolerances } } };
+  }
 
   const pipeline = [];
   if (Object.keys(match).length) pipeline.push({ $match: match });
-
-  // If intolerances provided, exclude recipes that contain those ingredients
-  if (filters.intolerances && filters.intolerances.length > 0) {
-    const normalizedIntolerances = filters.intolerances.map((s) => s.toLowerCase());
-    pipeline.push({
-      $addFields: {
-        hasIntolerance: {
-          $anyElementTrue: {
-            $map: {
-              input: { $ifNull: ['$extendedIngredients', []] },
-              as: 'ing',
-              in: {
-                $anyElementTrue: {
-                  $map: {
-                    input: normalizedIntolerances,
-                    as: 'bad',
-                    in: { $gte: [{ $indexOfBytes: [{ $toLower: '$$ing.name' }, '$$bad'] }, 0] }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    pipeline.push({ $match: { hasIntolerance: { $ne: true } } });
-  }
 
   // Compute matchCount based on fridgeIngredients
   const normalizedFridge = fridgeIngredients.map((s) => s.toLowerCase());
@@ -222,6 +197,9 @@ async function searchCachedRecipes({ filters = {}, fridgeIngredients = [], offse
       servings: 1,
       pricePerServing: 1,
       nutrition: 1,
+      diets: 1,
+      cuisines: 1,
+      intolerances: 1,
       matchCount: 1
     }
   });
@@ -270,9 +248,10 @@ async function upsertRecipes(recipes) {
         carbs: findNutrient('carbohydrates') || findNutrient('carbs'),
         fat: findNutrient('fat'),
       },
-      // store diets/cuisines (if present)
+      // store diets/cuisines/intolerances (if present)
       diets: Array.isArray(r.diets) ? r.diets : [],
       cuisines: Array.isArray(r.cuisines) ? r.cuisines : [],
+      intolerances: Array.isArray(r.intolerances) ? r.intolerances : [],
       // store some metadata
       spoonacularScore: r.spoonacularScore ?? r.aggregateLikes ?? null,
       updatedAt: new Date(),
