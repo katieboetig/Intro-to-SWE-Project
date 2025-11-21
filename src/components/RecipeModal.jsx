@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { getRecipeById } from '../spoonacular';
 
 export default function RecipeModal({ id, onClose }) {
   const [data, setData] = useState(null);
@@ -10,7 +9,12 @@ export default function RecipeModal({ id, onClose }) {
     let ignore = false;
     (async () => {
       try {
-        const d = await getRecipeById(id);
+        const apiKey = import.meta.env.VITE_SPOONACULAR_KEY;
+        const res = await fetch(
+          `https://api.spoonacular.com/recipes/${id}/information?apiKey=${apiKey}`
+        );
+        if (!res.ok) throw new Error(`Failed to load recipe: ${res.status}`);
+        const d = await res.json();
         if (!ignore) setData(d);
       } catch (e) {
         if (!ignore) setErr(e.message || 'Failed to load recipe');
@@ -61,7 +65,7 @@ export default function RecipeModal({ id, onClose }) {
               style={{ width: '100%', borderRadius: 12 }}
             />
             <p dangerouslySetInnerHTML={{ __html: data.summary }} />
-            <h3>Ingredients</h3>
+            <h3 style={{ fontWeight: 'bold' }}>Ingredients</h3>
             <ul>
               {data.extendedIngredients?.map((ing) => (
                 <li key={ing.id}>{ing.original}</li>
@@ -69,7 +73,7 @@ export default function RecipeModal({ id, onClose }) {
             </ul>
             {data.instructions && (
               <>
-                <h3>Instructions</h3>
+                <h3 style={{ fontWeight: 'bold' }}>Instructions</h3>
                 <div dangerouslySetInnerHTML={{ __html: data.instructions }} />
               </>
             )}
