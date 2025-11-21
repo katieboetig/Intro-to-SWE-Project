@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { searchCachedRecipes, ensureIndexes, getStats, getNutritionStats, getRecipeById } = require('./services/recipes');
+const { searchCachedRecipes, ensureIndexes, getStats, getNutritionStats, getRecipeById, getIntoleranceStats } = require('./services/recipes');
 
 const PORT = process.env.PORT || 3001;
 
@@ -35,17 +35,47 @@ app.get('/api/recipes/debug/nutrition', async (req, res) => {
   }
 });
 
+// Intolerances debug
+app.get('/api/recipes/debug/intolerances', async (req, res) => {
+  try {
+    const stats = await getIntoleranceStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('debug intolerances error', err);
+    res.status(500).json({ error: 'debug-failed', message: err.message });
+  }
+});
+
+// Debug: get a sample recipe with full ingredients
+app.get('/api/recipes/debug/sample-ingredients', async (req, res) => {
+  try {
+    const client = await (require('./services/recipes')).getClient?.() || (await require('mongodb').MongoClient.connect(process.env.MONGO_URI, { maxPoolSize: 10 }));
+    const db = client.db();
+    const col = db.collection('recipes');
+    const sample = await col.findOne({ 'extendedIngredients': { $exists: true, $ne: [] } }, { projection: { _id: 0, spoonacularId: 1, title: 1, extendedIngredients: 1 } });
+    res.json(sample);
+  } catch (err) {
+    console.error('debug sample ingredients error', err);
+    res.status(500).json({ error: 'debug-failed', message: err.message });
+  }
+});
+
 // Search endpoint: accepts filters + fridgeIngredients, offset, limit
 app.post('/api/recipes/search', async (req, res) => {
   try {
     const { filters = {}, fridgeIngredients = [], offset = 0, limit = 24 } = req.body;
-    console.log('SEARCH /api/recipes/search', { filtersSummary: {
-      query: filters.query || null,
-      cuisines: filters.cuisines ? filters.cuisines.length : 0,
-      diets: filters.diets ? filters.diets.length : 0,
-      intolerances: filters.intolerances ? filters.intolerances.length : 0,
-      priceBuckets: filters.priceBuckets ? filters.priceBuckets.length : 0
-    }, fridgeCount: fridgeIngredients.length, offset, limit });
+    console.log('RAW FILTERS OBJECT:', JSON.stringify(filters, null, 2));
+    console.log('SEARCH /api/recipes/search', { 
+      filters,
+      filtersSummary: {
+        query: filters.query || null,
+        cuisines: filters.cuisines ? filters.cuisines.length : 0,
+        diets: filters.diets ? filters.diets.length : 0,
+        intolerances: filters.intolerances || [],
+        priceBuckets: filters.priceBuckets ? filters.priceBuckets.length : 0
+      }, 
+      fridgeCount: fridgeIngredients.length, offset, limit 
+    });
     const result = await searchCachedRecipes({ filters, fridgeIngredients, offset, limit });
     console.log('SEARCH result', { totalResults: result.totalResults, returned: (result.results || []).length });
     res.json(result);

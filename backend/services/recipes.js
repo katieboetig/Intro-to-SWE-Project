@@ -118,13 +118,62 @@ async function searchCachedRecipes({ filters = {}, fridgeIngredients = [], offse
     match['cuisines'] = { $in: filters.cuisines };
   }
 
-  // Intolerances: filter by recipe's intolerances field
-  if (filters.intolerances && filters.intolerances.length > 0) {
-    match['intolerances'] = { $not: { $elemMatch: { $in: filters.intolerances } } };
-  }
-
   const pipeline = [];
   if (Object.keys(match).length) pipeline.push({ $match: match });
+
+  // Intolerances: filter by ingredient names since Spoonacular doesn't return intolerances field
+  if (filters.intolerances && filters.intolerances.length > 0) {
+    const intoleranceIngredients = {
+      'dairy': ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'lactose', 'whey', 'casein', 'sour cream', 'cottage cheese', 'ricotta', 'mozzarella', 'cheddar', 'parmesan', 'feta', 'halloumi'],
+      'gluten': ['wheat', 'bread', 'flour', 'gluten', 'barley', 'rye', 'semolina', 'couscous', 'bulgur', 'spelt', 'kamut'],
+      'egg': ['egg', 'eggs', 'mayonnaise', 'mayo'],
+      'soy': ['soy', 'tofu', 'edamame', 'soybean', 'tamari', 'miso', 'tempeh'],
+      'peanut': ['peanut', 'peanuts'],
+      'tree nut': ['almond', 'walnut', 'cashew', 'pecan', 'macadamia', 'pistachio', 'hazelnut', 'brazil nut', 'chestnut', 'pine nut', 'nut', 'pesto'],
+      'seafood': ['fish', 'salmon', 'tuna', 'ahi', 'cod', 'bass', 'halibut', 'mackerel', 'anchovy', 'sardine', 'trout', 'flounder', 'snapper', 'tilapia', 'shrimp', 'crab', 'lobster', 'oyster', 'mussel', 'clam', 'squid', 'octopus', 'seaweed', 'nori', 'caviar', 'roe', 'scallop'],
+      'sesame': ['sesame', 'tahini'],
+      'shellfish': ['shrimp', 'crab', 'lobster', 'oyster', 'mussel', 'clam', 'scallop', 'prawn'],
+      'grain': ['grain', 'wheat', 'barley', 'oats', 'rye', 'corn', 'rice', 'millet', 'quinoa'],
+      'sulfite': ['sulfite', 'sulphite', 'sulfites', 'wine'],
+    };
+
+    // Normalize intolerances to lowercase for matching
+    const normalizedIntolerances = filters.intolerances.map(s => s.toLowerCase());
+    const badIngredients = [];
+    
+    normalizedIntolerances.forEach(intolerance => {
+      if (intoleranceIngredients[intolerance]) {
+        badIngredients.push(...intoleranceIngredients[intolerance]);
+      }
+    });
+
+    console.log('Intolerance filtering:', { intolerances: normalizedIntolerances, badIngredients });
+
+    if (badIngredients.length > 0) {
+      pipeline.push({
+        $addFields: {
+          hasIntoleranceIngredient: {
+            $anyElementTrue: {
+              $map: {
+                input: { $ifNull: ['$extendedIngredients', []] },
+                as: 'ing',
+                in: {
+                  $anyElementTrue: {
+                    $map: {
+                      input: badIngredients,
+                      as: 'bad',
+                      in: { $gte: [{ $indexOfBytes: [{ $toLower: '$$ing.name' }, '$$bad'] }, 0] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      pipeline.push({ $match: { hasIntoleranceIngredient: { $ne: true } } });
+    }
+  }
 
   // Compute matchCount based on fridgeIngredients
   const normalizedFridge = fridgeIngredients.map((s) => s.toLowerCase());
@@ -287,7 +336,19 @@ async function getNutritionStats() {
   const hasProtein = await col.countDocuments({ 'nutrition.protein': { $ne: null } });
   const hasCarbs = await col.countDocuments({ 'nutrition.carbs': { $ne: null } });
   const hasFat = await col.countDocuments({ 'nutrition.fat': { $ne: null } });
-  return { total, hasCalories, hasProtein, hasCarbs, hasFat };
+  const hasIntolerances = await col.countDocuments({ 'intolerances': { $exists: true, $ne: [] } });
+  return { total, hasCalories, hasProtein, hasCarbs, hasFat, hasIntolerances };
+}
+
+// Get intolerance statistics
+async function getIntoleranceStats() {
+  const client = await getClient();
+  const db = client.db();
+  const col = getCollection(db);
+  const total = await col.countDocuments();
+  const withIntolerances = await col.countDocuments({ 'intolerances': { $exists: true, $ne: [] } });
+  const sample = await col.find({ 'intolerances': { $exists: true, $ne: [] } }).limit(5).project({ _id: 0, spoonacularId: 1, title: 1, intolerances: 1 }).toArray();
+  return { total, withIntolerances, sample };
 }
 
 // Get a single recipe by spoonacularId
@@ -304,4 +365,4 @@ async function getRecipeById(id) {
   return { ...doc, id: doc.spoonacularId };
 }
 
-module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats, getNutritionStats, getRecipeById };
+module.exports = { ensureIndexes, searchCachedRecipes, upsertRecipes, getStats, getNutritionStats, getRecipeById, getIntoleranceStats };
