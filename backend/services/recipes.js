@@ -9,7 +9,14 @@ if (!MONGO_URI) {
 let clientPromise = null;
 async function getClient() {
   if (!clientPromise) {
-    clientPromise = MongoClient.connect(MONGO_URI, { maxPoolSize: 10 });
+    clientPromise = MongoClient.connect(MONGO_URI, { 
+      maxPoolSize: 10,
+      ssl: true,
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
+    });
   }
   return clientPromise;
 }
