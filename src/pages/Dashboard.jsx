@@ -9,6 +9,7 @@ import AddToFridgeButton from "../components/AddToFridgeButton"
 import RecipeFiltersSidebar from "../components/RecipeFiltersSidebar"
 import RecipeModal from "../components/RecipeModal"
 import { backendSearchRecipes } from "../api/backend"
+import Blog from "./Blog"
 
 
 const mockIngredients = [
@@ -545,12 +546,7 @@ export default function Dashboard() {
           </section>
         )}
 
-        {activeTab === "blog" && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Blog</h2>
-            <p className="text-gray-600">Blog content coming soon...</p>
-          </div>
-        )}
+        {activeTab === "blog" && <Blog />}
       </main>
 
       {/* Side Panel */}
