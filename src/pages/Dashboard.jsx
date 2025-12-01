@@ -357,7 +357,7 @@ export default function Dashboard() {
         <div className="px-6 lg:px-12 py-6">
           <div className="flex items-center justify-between">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-green-600 to-orange-500 bg-clip-text text-transparent">
-              Welcome, {user?.displayName || "User"}!
+              Welcome, {user?.displayName || "User"}
             </h1>
             <button
               onClick={() => setShowSidebar(true)}

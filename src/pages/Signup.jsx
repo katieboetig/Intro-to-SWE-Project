@@ -47,12 +47,21 @@ export default function Signup() {
           maxWidth: '420px'
         }}>
           <h1 style={{
-            fontSize: '28px',
+            fontSize: '36px',
+            fontWeight: '700',
+            marginBottom: '24px',
+            color: '#10b981',
+            textAlign: 'center',
+            letterSpacing: '1px'
+          }}>AI-NGREDIENT</h1>
+          
+          <h2 style={{
+            fontSize: '24px',
             fontWeight: '700',
             marginBottom: '8px',
-            color: '#10b981',
+            color: '#1f2937',
             textAlign: 'center'
-          }}>Get Started!</h1>
+          }}>Get Started</h2>
           
           <p style={{
             color: '#6b7280',

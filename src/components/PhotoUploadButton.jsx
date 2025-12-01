@@ -170,11 +170,11 @@ export default function PhotoUploadButton({ onIngredientsUpdate, showModal, setS
 
             {/* Tips for Best Results */}
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2 text-sm">📸 Tips for Best Results:</h4>
+              <h4 className="font-semibold text-blue-900 mb-2 text-sm">Tips for Best Results:</h4>
               <ul className="text-blue-800 text-xs space-y-1">
-                <li>• Take photos <strong>close up</strong> to the ingredients</li>
-                <li>• Use <strong>good lighting</strong> (natural light works best)</li>
-                <li>• Keep ingredients <strong>clearly visible</strong></li>
+                <li>• Take photos close up to the ingredients</li>
+                <li>• Use good lighting (natural light works best)</li>
+                <li>• Keep ingredients clearly visible</li>
                 <li>• Avoid shadows and glare</li>
                 <li>• Center the items in the frame</li>
               </ul>
