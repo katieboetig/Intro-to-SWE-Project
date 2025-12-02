@@ -28,6 +28,7 @@ export default function Login() {
           opacity: 1;
         }
       `}</style>
+
       <div style={{
         minHeight: '100vh',
         display: 'flex',
@@ -44,6 +45,7 @@ export default function Login() {
           width: '100%',
           maxWidth: '420px'
         }}>
+
           <h1 style={{
             fontSize: '36px',
             fontWeight: '700',
@@ -170,6 +172,17 @@ export default function Login() {
             >
               Log In
             </button>
+
+            {/* ✅ Added helper text */}
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              textAlign: 'center',
+              marginTop: '4px'
+            }}>
+              Log in to access your AI-ngredient smart fridge and personalized recipe suggestions.
+            </p>
+
           </form>
 
           <p style={{
@@ -178,7 +191,7 @@ export default function Login() {
             color: '#6b7280',
             fontSize: '15px'
           }}>
-            New here?{' '}
+            New here?{" "}
             <Link
               to="/signup"
               style={{
