@@ -1,3 +1,8 @@
+// AI-ngredient Project
+// Dashboard Page
+// Adds personalized fridge ingredient display, sidebar navigation, and recipe discovery.
+// Updated by Katie Boetig on Dec 2, 2025 for documentation improvements.
+
 import { useEffect, useRef, useState } from "react"
 import { Home, BookOpen, FileText, LogOut, Menu, X } from "lucide-react"
 import { useAuth } from "../auth/AuthContext"
