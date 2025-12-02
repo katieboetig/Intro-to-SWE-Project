@@ -87,10 +87,7 @@ export default function Dashboard() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const LOAD_SIZE = 24;
-  // Fetch a larger batch once up front so we can client-side filter/sort by fridge ingredients
-  // Increase to cover the backend backfill size so users can scroll through all cached recipes
   const FULL_FETCH_SIZE = 10000;
-  // Store the full fetched set in memory so infinite scroll is purely client-side
   const [allRecipes, setAllRecipes] = useState(null);
   const sentinelRef = useRef(null);
 
@@ -113,7 +110,6 @@ export default function Dashboard() {
   }
 
   const handleIngredientsUpdate = (newIngredients) => {
-    // Transform webhook data to match our component format
     const transformedIngredients = newIngredients.map((item, index) => ({
       id: Date.now() + index,
       name: item.name,
@@ -124,7 +120,6 @@ export default function Dashboard() {
       container: item.container,
       expiry: item.expiry,
       nutrition: {
-        // Placeholder nutrition data - can be enhanced later
         calories: "--",
         protein: "--",
         carbs: "--",
@@ -154,12 +149,10 @@ export default function Dashboard() {
     };
 
     if (editingIngredient) {
-      // Update existing ingredient
       setIngredients(prev => prev.map(ing => 
         ing.id === editingIngredient.id ? newIngredient : ing
       ));
     } else {
-      // Add new ingredient
       setIngredients(prev => [...prev, newIngredient]);
     }
     
@@ -183,6 +176,7 @@ export default function Dashboard() {
       console.error("Error logging out:", error)
     }
   }
+
 
   const priceFilter = (recipe, filterState) => {
     const cents = recipe.pricePerServing ?? 0;
@@ -208,12 +202,11 @@ export default function Dashboard() {
     return (anyBucket ? passesBucket && passesCustom : passesCustom);
   };
 
-  // Count how many user fridge ingredients match a recipe
+
   const countMatchingIngredients = (recipe) => {
     if (!ingredients.length) return 0;
     
     const fridgeIngredientNames = ingredients.map(ing => ing.name.toLowerCase());
-    // Use extendedIngredients from Spoonacular API
     const recipeIngredients = recipe.extendedIngredients || [];
     
     let matchCount = 0;
@@ -229,7 +222,7 @@ export default function Dashboard() {
     return matchCount;
   };
 
-  // Sort recipes by fridge ingredient matches (highest first)
+
   const sortRecipesByFridgeMatches = (recipesToSort) => {
     if (!ingredients.length) return recipesToSort;
     
@@ -240,18 +233,15 @@ export default function Dashboard() {
     });
   };
 
-  // Load a full batch once (when replace === true) and then page client-side.
+
   async function loadPage(nextOffset, replace = false, filtersToUse = null) {
     setLoading(true);
     setErr("");
 
     try {
-      // Use provided filters or fall back to current filters state
       const currentFilters = filtersToUse !== null ? filtersToUse : filters;
 
-      // When replacing (initial load or new filters), fetch a larger batch up front
       if (replace) {
-        // Request the backend which uses the cached Mongo dataset
         const res = await backendSearchRecipes({
           filters: currentFilters,
           fridgeIngredients: ingredients.map((i) => i.name),
@@ -260,25 +250,20 @@ export default function Dashboard() {
         });
         const results = Array.isArray(res) ? res : (res.results || []);
 
-        // Apply price filter client-side with the correct filter state
         const filtered = results.filter((recipe) => priceFilter(recipe, currentFilters));
 
-        // If user has fridge ingredients, only include recipes that match at least one ingredient
         let finalRecipes = filtered;
         if (ingredients.length > 0) {
           finalRecipes = filtered.filter((recipe) => countMatchingIngredients(recipe) > 0);
           finalRecipes = sortRecipesByFridgeMatches(finalRecipes);
         }
 
-        // Store full set in memory and expose the first page to the UI
         setAllRecipes(finalRecipes);
         const firstSlice = finalRecipes.slice(0, LOAD_SIZE);
         setRecipes(firstSlice);
         setOffset(firstSlice.length);
         setHasMore(firstSlice.length < finalRecipes.length);
       } else {
-        // Not replacing: this call comes from the intersection observer when client-side paging.
-        // If we have the full set in memory, just page from it.
         if (allRecipes) {
           const nextSlice = allRecipes.slice(nextOffset, nextOffset + LOAD_SIZE);
           setRecipes((prev) => [...prev, ...nextSlice]);
@@ -293,35 +278,31 @@ export default function Dashboard() {
     }
   }
 
-  // Apply sidebar filters -> refresh list from page 0
+
   function applyFilters(newFilters) {
     setFilters(newFilters);
     setOffset(0);
     setHasMore(true);
-    // Pass newFilters directly to avoid closure issue with stale filters
     loadPage(0, true, newFilters);
   }
 
-  // Auto-load popular when entering the Recipes tab the first time
+
   useEffect(() => {
     if (activeTab === "recipes" && recipes.length === 0 && !loading) {
       loadPage(0, true);
     }
   }, [activeTab]);
 
-  // When fridge ingredients change while viewing the Recipes tab, reload the full list
-  // We guard so we don't duplicate the initial load that runs when first entering the tab.
+
   useEffect(() => {
     if (activeTab !== "recipes") return;
-    // If we haven't loaded any recipes yet, let the existing activeTab effect handle the initial load
     if (recipes.length === 0) return;
     if (loading) return;
 
-    // Refresh the full fetch so the fridge-matching/sort is recomputed
     loadPage(0, true);
   }, [ingredients, activeTab]);
 
-  // Infinite scroll via IntersectionObserver
+
   useEffect(() => {
     if (activeTab !== "recipes") return;
     const el = sentinelRef.current;
@@ -330,24 +311,22 @@ export default function Dashboard() {
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          // If we have the full set in memory, page client-side. Otherwise request another page.
           if (allRecipes) {
             const nextSlice = allRecipes.slice(offset, offset + LOAD_SIZE);
             setRecipes((prev) => [...prev, ...nextSlice]);
             setOffset(offset + nextSlice.length);
             setHasMore(offset + nextSlice.length < allRecipes.length);
           } else {
-            // Pass current filters to avoid stale closure
             loadPage(offset, false, filters);
           }
         }
       },
-      { rootMargin: "800px 0px" } // prefetch before hitting bottom
+      { rootMargin: "800px 0px" }
     );
 
     obs.observe(el);
     return () => obs.disconnect();
-  }, [activeTab, hasMore, loading, offset, filters]); // Added filters to dependency
+  }, [activeTab, hasMore, loading, offset, filters]);
 
 
   return (
@@ -472,11 +451,13 @@ export default function Dashboard() {
             <div className="text-center space-y-2">
               <h2 className="text-3xl font-bold text-gray-900">Your Smart Fridge</h2>
               <p className="text-gray-600">Click the fridge to view your ingredients</p>
+              <p className="text-gray-500 text-sm">
+                AI-ngredient analyzes what&apos;s in your fridge to suggest smart, personalized recipes.
+              </p>
             </div>
 
-            {/* Fridge Container with Subtle Background */}
+            {/* Fridge Container */}
             <div className="relative max-w-4xl mx-auto">
-              {/* Subtle radial gradient background */}
               <div className="absolute inset-0 bg-gradient-radial from-green-50/30 via-transparent to-orange-50/20 rounded-3xl transform scale-110 -z-10"></div>
               <div className="relative bg-gradient-to-br from-white/80 via-gray-50/60 to-white/90 rounded-2xl p-8 shadow-sm border border-gray-100/50">
                 <Fridge3D ingredients={ingredients} onIngredientClick={handleIngredientClick} />
@@ -487,10 +468,9 @@ export default function Dashboard() {
 
         {activeTab === "recipes" && (
           <section className="grid lg:grid-cols-[20rem_1fr] gap-6">
-            {/* Sidebar filters */}
             <RecipeFiltersSidebar value={filters} onChange={applyFilters} />
 
-            {/* Results area */}
+            {/* Results */}
             <div className="min-h-[60vh]">
               <header className="mb-6">
                 <h2 className="text-3xl font-bold text-gray-900">Recipes</h2>
@@ -513,7 +493,6 @@ export default function Dashboard() {
                       loading="lazy"
                     />
                     <div className="flex-1">
-                      {/* Clamp title to 2 lines */}
                       <div
                         className="font-semibold text-base"
                         style={{
@@ -537,10 +516,8 @@ export default function Dashboard() {
               </div>
 
               {loading && <p className="text-gray-500 mt-4">Loading…</p>}
-              {/* sentinel for infinite scroll */}
               <div ref={sentinelRef} className="h-1" />
 
-              {/* Details modal */}
               {openId && <RecipeModal id={openId} onClose={() => setOpenId(null)} />}
             </div>
           </section>
@@ -569,7 +546,7 @@ export default function Dashboard() {
         editingIngredient={editingIngredient}
       />
 
-      {/* Combined Add to Fridge Button - Only on Home Page */}
+      {/* Add to Fridge Button */}
       {activeTab === "home" && (
         <>
           <AddToFridgeButton
@@ -581,7 +558,6 @@ export default function Dashboard() {
             isProcessing={processing}
           />
 
-          {/* Photo Upload Handler (no button, just functionality) */}
           <PhotoUploadButton 
             onIngredientsUpdate={handleIngredientsUpdate}
             showModal={showPhotoModal}
